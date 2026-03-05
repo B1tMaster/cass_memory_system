@@ -8,9 +8,12 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOllama } from "ollama-ai-provider";
 import { generateObject, type LanguageModel } from "ai";
 import { z } from "zod";
-import type { Config, DiaryEntry } from "./types.js";
+import type { Config, DiaryEntry, LLMProvider } from "./types.js";
 import { checkBudget, recordCost } from "./cost.js";
 import { truncateForContext, warn } from "./utils.js";
+
+// Re-export LLMProvider from types.ts (single source of truth)
+export type { LLMProvider } from "./types.js";
 
 export interface LLMUsage {
   promptTokens: number;
@@ -29,11 +32,6 @@ export interface LLMIO {
 const DEFAULT_LLM_IO: LLMIO = {
   generateObject: generateObject as any,
 };
-
-/**
- * Supported LLM provider names
- */
-export type LLMProvider = "openai" | "anthropic" | "google" | "ollama";
 
 /**
  * Minimal config interface for LLM operations.
@@ -154,11 +152,11 @@ export function getModel(config: { provider: string; model: string; apiKey?: str
 }
 
 export function isLLMAvailable(provider: LLMProvider): boolean {
-  // Ollama is "available" when explicitly configured via OLLAMA_BASE_URL.
-  // We don't auto-detect a running local server because that would require
-  // a network call, and this function is used synchronously.
+  // Ollama is "available" when configured via env var OR when it's the
+  // default provider (assumes localhost:11434). We cannot do a network check
+  // here since this function is synchronous.
   if (provider === "ollama") {
-    return !!process.env.OLLAMA_BASE_URL;
+    return !!process.env.OLLAMA_BASE_URL || !!process.env.OLLAMA_HOST;
   }
   const envVar = ENV_VAR_MAP[provider];
   return !!process.env[envVar];
